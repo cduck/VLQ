@@ -506,6 +506,7 @@ function match_and_evaluate_syndromes(plaqs, graph_nodes, space_boundary,
     matching = construct_matching_graph(graph_nodes, costs, extra_boundary, error_ids)
     solve(matching)
     corrected = count_corrected_errors(matching, error_ids, path_lengths)
+    finalize(matching)
     failed = mod(error_count + corrected, 2) != 0
     failed
 end
