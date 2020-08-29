@@ -338,36 +338,6 @@ function constuct_graph_costs(graph_nodes::BiMap{NodeT, Int}, graph::Graph{Int},
 end
 
 
-function apply_sim_error!(noise_model::Nothing,
-                          state::ChpState, zx_counts_out::Vector{Int},
-                          kind::Symbol, qubits::NTuple{N, Int} where N)
-    # Apply no error when no noise model
-end
-function apply_sim_error!(noise_model::NoiseModel,
-                          state::ChpState, zx_counts_out::Vector{Int},
-                          kind::Symbol, qubits::NTuple{N, Int} where N)
-    p = noise_model.errors[kind]
-    # TODO: rng
-    z_count = x_count = 0
-    for q in qubits
-        r = rand(rng, Float64)
-        r >= p && return
-        # Apply X, Y, or Z with (1/3)p probability
-        if r < (2/3)*p
-            z_gate!(state, q)
-            z_count += 1
-        end
-        if r >= (1/3)*p
-            x_gate!(state, q)
-            x_count += 1
-        end
-    end
-    zx_counts_out[2] += z_count  # Z errors cause X syndromes
-    zx_counts_out[1] += x_count
-    nothing
-end
-
-
 """
     CodeDistanceRun(ctx)
 
@@ -398,6 +368,35 @@ function CodeDistanceRun(ctx::CodeDistanceSim)
 end
 
 
+function apply_sim_error!(noise_model::Nothing,
+                          state::ChpState, zx_counts_out::Vector{Int},
+                          kind::Symbol, qubits::NTuple{N, Int} where N)
+    # Apply no error when no noise model
+end
+function apply_sim_error!(noise_model::NoiseModel,
+                          state::ChpState, zx_counts_out::Vector{Int},
+                          kind::Symbol, qubits::NTuple{N, Int} where N)
+    p = noise_model.errors[kind]
+    # TODO: rng
+    z_count = x_count = 0
+    for q in qubits
+        r = rand(rng, Float64)
+        r >= p && return
+        # Apply X, Y, or Z with (1/3)p probability
+        if r < (2/3)*p
+            z_gate!(state, q)
+            z_count += 1
+        end
+        if r >= (1/3)*p
+            x_gate!(state, q)
+            x_count += 1
+        end
+    end
+    zx_counts_out[2] += z_count  # Z errors cause X syndromes
+    zx_counts_out[1] += x_count
+    nothing
+end
+
 function exec_syndrome_layer(noise_model::Union{NoiseModel, Nothing},
                              syndrome_circuit::BasicSyndrome,
                              run::CodeDistanceRun,
@@ -408,10 +407,6 @@ function exec_syndrome_layer(noise_model::Union{NoiseModel, Nothing},
     for q in ctx.data_qubits
         apply_sim_error!(noise_model, state, run.zx_error_counts,
                          :uniform_data, (q,))
-    end
-    for q in ctx.anc_qubits
-        apply_sim_error!(noise_model, state, run.zx_error_counts,
-                         :uniform_anc, (q,))
     end
     # Run circuit
     for info in ctx.z_plaq_info
@@ -427,6 +422,11 @@ function exec_syndrome_layer(noise_model::Union{NoiseModel, Nothing},
             cnot!(state, anc, dat)
         end
         hadamard!(state, anc)
+    end
+    # Apply errors
+    for q in ctx.anc_qubits
+        apply_sim_error!(noise_model, state, run.zx_meas_error_counts,
+                         :uniform_anc, (q,))
     end
     # Measure
     for (i, info) in enumerate(ctx.z_plaq_info)
