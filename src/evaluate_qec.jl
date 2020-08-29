@@ -10,7 +10,7 @@ using Tweaks.BiMaps, Tweaks.BaseTweaks
 export x_gate!, z_gate!, reset!, measure_reset!,
     NoiseModel, SyndromeCircuit, BasicSyndrome,
     CodeDistanceSim, CodeDistanceRun,
-    MatchingGraphWeights, apply_sim_error!, do_single_run
+    MatchingGraphWeights, apply_sim_error!, do_single_run, do_n_runs
 
 
 const rng = Random.GLOBAL_RNG
@@ -284,7 +284,7 @@ function Base.getindex(w::MatchingGraphWeights, i, j)::Float64
     # Inter-boundary
     (n[2] != :plaq && m[2] != :plaq) && return 0.0
     # Time edge (including boundary)
-    n[1] != m[1] && return 0.0
+    n[1] != m[1] && return 1.0
     # Space edge (including boundary)
     return 1.0
 end
@@ -292,6 +292,7 @@ end
 function constuct_graph_costs(graph_nodes::BiMap{NodeT, Int}, graph::Graph{Int},
                               noise_model::NoiseModel,
                               syndrome_circuit::SyndromeCircuit)
+    rev_graph_nodes = rev(graph_nodes)
     weights = MatchingGraphWeights(graph_nodes, noise_model, syndrome_circuit)
     paths = floyd_warshall_shortest_paths(graph, weights)
     boundary_ids = Set{Int}(
@@ -314,9 +315,14 @@ function constuct_graph_costs(graph_nodes::BiMap{NodeT, Int}, graph::Graph{Int},
             hits_boundary = false
             while jj != 0
                 in_boundary = jj in boundary_ids
-                non_boundary_count += !in_boundary
+                jj2 = paths.parents[i, jj]
+                is_time_edge = (
+                    !in_boundary && jj2 != 0 && !(jj2 in boundary_ids)
+                    && rev_graph_nodes[jj][1] != rev_graph_nodes[jj2][1]
+                )
+                non_boundary_count += !in_boundary && !is_time_edge
                 hits_boundary |= in_boundary
-                jj = paths.parents[i, jj]
+                jj = jj2
             end
             if hits_boundary
                 push!(boundary_paths, (i, j))
@@ -349,11 +355,11 @@ function apply_sim_error!(noise_model::NoiseModel,
         # Apply X, Y, or Z with (1/3)p probability
         if r < (2/3)*p
             z_gate!(state, q)
-            z_count+=1
+            z_count += 1
         end
         if r >= (1/3)*p
             x_gate!(state, q)
-            x_count+=1
+            x_count += 1
         end
     end
     zx_counts_out[2] += z_count  # Z errors cause X syndromes
@@ -528,6 +534,27 @@ function do_single_run(run::CodeDistanceRun, z_only::Bool=false)
             ctx.x_path_lengths, x_syndromes, x_errors)
     end
     z_fail, x_fail, (z_errors, x_errors, run.zx_meas_error_counts...,)
+end
+
+"""
+    do_n_runs(run, n, z_only=false)
+
+Simulate and error-correct n times.  Returns the error probability.
+"""
+function do_n_runs(run::CodeDistanceRun, n::Int, z_only::Bool=false)
+    fail_count = 0
+    if z_only
+        for _ in 1:n
+            z_fail, = do_single_run(run, true)
+            fail_count += z_fail
+        end
+    else
+        for _ in 1:n
+            z_fail, x_fail = do_single_run(run)
+            fail_count += z_fail || x_fail
+        end
+    end
+    return fail_count / n
 end
 
 
