@@ -1,5 +1,3 @@
-module EvaluateQec
-
 using Random
 using LightGraphs
 using BlossomV
@@ -555,7 +553,4 @@ function do_n_runs(run::CodeDistanceRun, n::Int, z_only::Bool=false)
         end
     end
     return fail_count / n
-end
-
-
 end
