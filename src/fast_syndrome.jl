@@ -1,16 +1,16 @@
-export FastStandardSyndrome
+export FastStandardSyndrome, AbstractFastSyndrome
 
-
-struct FastStandardSyndrome <: SyndromeCircuit end
+abstract type AbstractFastSyndrome <: SyndromeCircuit end
+struct FastStandardSyndrome <: AbstractFastSyndrome end
 
 function apply_fast_error!(noise_model::Nothing,
-                          state::ChpState, zx_counts_out::Vector{Int},
-                          kind::Symbol, qubits::NTuple{N, Int} where N)
+                           state::ChpState, zx_counts_out::Vector{Int},
+                           kind::Symbol, qubits)
     # Apply no error when no noise model
 end
 function apply_fast_error!(noise_model::NoiseModel,
-                          state::ChpState, zx_counts_out::Vector{Int},
-                          kind::Symbol, qubits::NTuple{N, Int} where N)
+                           state::ChpState, zx_counts_out::Vector{Int},
+                           kind::Symbol, qubits)
     p = noise_model.errors[kind]
     # TODO: rng
     z_count = x_count = 0
@@ -19,11 +19,11 @@ function apply_fast_error!(noise_model::NoiseModel,
         r >= p && return
         # Apply X, Y, or Z with (1/3)p probability
         if r < (2/3)*p
-            state.x[q] ⊻= true  # Fake Z
+            state.x[q] ⊻= true  # Z gate
             z_count += 1
         end
         if r >= (1/3)*p
-            state.z[q] ⊻= true  # Fake X
+            state.z[q] ⊻= true  # X gate
             x_count += 1
         end
     end
@@ -33,7 +33,7 @@ function apply_fast_error!(noise_model::NoiseModel,
 end
 
 function exec_syndrome_layer(noise_model::Union{NoiseModel, Nothing},
-                             syndrome_circuit::FastStandardSyndrome,
+                             syndrome_circuit::AbstractFastSyndrome,
                              run::CodeDistanceRun,
                              layer_i::Int)
     ctx = run.ctx
@@ -47,13 +47,13 @@ function exec_syndrome_layer(noise_model::Union{NoiseModel, Nothing},
     for info in ctx.z_plaq_info
         anc = info.ancilla
         for dat in info.data
-            state.z[anc] ⊻= state.z[dat]  # Fake CNOT
+            state.z[anc] ⊻= state.z[dat]  # CNOT
         end
     end
     for info in ctx.x_plaq_info
         anc = info.ancilla
         for dat in info.data
-            state.x[anc] ⊻= state.x[dat]  # Fake CNOT
+            state.x[anc] ⊻= state.x[dat]  # CNOT
         end
     end
     # Apply errors
@@ -63,21 +63,21 @@ function exec_syndrome_layer(noise_model::Union{NoiseModel, Nothing},
     end
     # Measure
     for (i, info) in enumerate(ctx.z_plaq_info)
-        meas = state.z[info.ancilla]  # Fake measure
-        state.z[info.ancilla] = false  # Fake reset
+        meas = state.z[info.ancilla]  # Measure
+        state.z[info.ancilla] = false  # Reset
         run.z_syndromes[i, layer_i] = run.z_prev[i] ⊻ meas
         run.z_prev[i] = meas
     end
     for (i, info) in enumerate(ctx.x_plaq_info)
-        meas = state.x[info.ancilla]  # Fake measure
-        state.x[info.ancilla] = false  # Fake reset
+        meas = state.x[info.ancilla]  # Measure
+        state.x[info.ancilla] = false  # Reset
         run.x_syndromes[i, layer_i] = run.x_prev[i] ⊻ meas
         run.x_prev[i] = meas
     end
     nothing
 end
 
-function simulate_syndrome_run(syndrome_circuit::FastStandardSyndrome,
+function simulate_syndrome_run(syndrome_circuit::AbstractFastSyndrome,
                                run::CodeDistanceRun)
     ctx = run.ctx
     run.state.z[1:run.ctx.num_qubits] .= false  # Clean start
@@ -91,16 +91,4 @@ function simulate_syndrome_run(syndrome_circuit::FastStandardSyndrome,
         exec_syndrome_layer(noise, syndrome_circuit, run, i)
     end
     run.z_syndromes, run.x_syndromes
-end
-
-function Base.getindex(w::MatchingGraphWeights{FastStandardSyndrome}, i, j
-                      )::Float64
-    r = rev(w.graph_nodes)
-    n, m = r[i], r[j]
-    # Inter-boundary
-    (n[2] != :plaq && m[2] != :plaq) && return 0.0
-    # Time edge (including boundary)
-    n[1] != m[1] && return 1.0
-    # Space edge (including boundary)
-    return 1.0
 end

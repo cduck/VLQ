@@ -83,6 +83,7 @@ struct CodeDistanceSim
     z_plaqs::Vector{Tuple{Int, Int}}
     z_plaq_info::Vector{PlaqInfoT}
     z_space_boundary::Vector{Tuple{Int, Int}}
+    z_doubled_boundary::Vector{Tuple{Int, Int}}
     z_graph_nodes::BiMap{NodeT, Int}
     z_graph::Graph{Int}
     z_costs::Matrix{Float64}
@@ -91,6 +92,7 @@ struct CodeDistanceSim
     x_plaqs::Vector{Tuple{Int, Int}}
     x_plaq_info::Vector{PlaqInfoT}
     x_space_boundary::Vector{Tuple{Int, Int}}
+    x_doubled_boundary::Vector{Tuple{Int, Int}}
     x_graph_nodes::BiMap{NodeT, Int}
     x_graph::Graph{Int}
     x_costs::Matrix{Float64}
@@ -105,7 +107,8 @@ end
 function CodeDistanceSim(z_dist::Int, x_dist::Int, m_dist::Int,
                          syndrome_circuit::SyndromeCircuit, noise_model::NoiseModel)
     # Graphs
-    (z_plaqs, z_space_boundary), (x_plaqs, x_space_boundary) = (
+    (z_plaqs, z_space_boundary, z_doubled_boundary), (
+        x_plaqs, x_space_boundary, x_doubled_boundary) = (
         make_plaqs(z_dist, x_dist))
     num_qubits, anc_qubits, data_qubits, z_plaq_info, x_plaq_info = (
         make_qubit_assignments(z_dist, z_plaqs, x_dist, x_plaqs))
@@ -115,17 +118,19 @@ function CodeDistanceSim(z_dist::Int, x_dist::Int, m_dist::Int,
         make_graph(m_dist+1, x_plaqs, x_space_boundary, false, false))
 
     z_costs, z_bpaths, z_path_lengths = constuct_graph_costs(
-        z_graph_nodes, z_graph, noise_model, syndrome_circuit)
+        z_graph_nodes, z_graph, z_doubled_boundary,
+        noise_model, syndrome_circuit, false)
     x_costs, x_bpaths, x_path_lengths = constuct_graph_costs(
-        x_graph_nodes, x_graph, noise_model, syndrome_circuit)
+        x_graph_nodes, x_graph, x_doubled_boundary,
+        noise_model, syndrome_circuit, true)
 
     CodeDistanceSim(
         z_dist, x_dist, m_dist, syndrome_circuit, noise_model,
         num_qubits, anc_qubits, data_qubits,
-        z_plaqs, z_plaq_info, z_space_boundary, z_graph_nodes, z_graph,
-            z_costs, z_bpaths, z_path_lengths,
-        x_plaqs, x_plaq_info, x_space_boundary, x_graph_nodes, x_graph,
-            x_costs, x_bpaths, x_path_lengths,
+        z_plaqs, z_plaq_info, z_space_boundary, z_doubled_boundary,
+            z_graph_nodes, z_graph, z_costs, z_bpaths, z_path_lengths,
+        x_plaqs, x_plaq_info, x_space_boundary, x_doubled_boundary,
+            x_graph_nodes, x_graph, x_costs, x_bpaths, x_path_lengths,
     )
 end
 
@@ -142,6 +147,11 @@ function make_plaqs(z_dist, x_dist)
         for (x, y) in z_plaqs
         if x == 1 || x == z_dist-1
     ]
+    z_doubled_boundary = Tuple{Int, Int}[  # Plaqs with two boundary qubits
+        (x, y)
+        for (x, y) in z_space_boundary
+        if 1 <= y <= x_dist-1
+    ]
     x_plaqs = Tuple{Int, Int}[
         (x, y)
         for x in 0:z_dist
@@ -153,7 +163,13 @@ function make_plaqs(z_dist, x_dist)
         for (x, y) in x_plaqs
         if y == 1 || y == x_dist-1
     ]
-    (z_plaqs, z_space_boundary), (x_plaqs, x_space_boundary)
+    x_doubled_boundary = Tuple{Int, Int}[  # Plaqs with two boundary qubits
+        (x, y)
+        for (x, y) in x_space_boundary
+        if 1 <= x <= z_dist-1
+    ]
+    (z_plaqs, z_space_boundary, z_doubled_boundary), (
+        x_plaqs, x_space_boundary, x_doubled_boundary)
 end
 function make_qubit_assignments(z_dist, z_plaqs, x_dist, x_plaqs)
     counter = Iterators.Stateful(Iterators.countfrom(1))
@@ -272,8 +288,11 @@ Used by construct_graph_costs().
 """
 struct MatchingGraphWeights{SyndromeCircuitT} <: AbstractMatrix{Float64}
     graph_nodes::BiMap{NodeT, Int}
+    doubled_boundary::Set{Tuple{Int, Int}}
     noise_model::NoiseModel
     syndrome_circuit::SyndromeCircuitT
+    space_edge::Float64
+    time_edge::Float64
 end
 Base.size(w::MatchingGraphWeights) = (l=length(w.graph_nodes); (l, l))
 function Base.getindex(w::MatchingGraphWeights, i, j)::Float64
@@ -282,16 +301,35 @@ function Base.getindex(w::MatchingGraphWeights, i, j)::Float64
     # Inter-boundary
     (n[2] != :plaq && m[2] != :plaq) && return 0.0
     # Time edge (including boundary)
-    n[1] != m[1] && return 1.0
+    n[1] != m[1] && return w.time_edge
     # Space edge (including boundary)
-    return 1.0
+    return w.space_edge
+    #n[2] != :plaq && ((n, m) = (m, n))  # Make it plaq->boundary or plaq->plaq
+    #return (m[2] != :plaq && (m[3], m[4]) in w.doubled_boundary
+    #    # Plaq with two boundary qubits
+    #    ? w.space_double_edge
+    #    # Edge error probability dependent on only one qubit
+    #    : w.space_edge
+    #)
+end
+function matching_space_edge(::SyndromeCircuit, noise::NoiseModel, is_x::Bool)
+    -log(noise.errors[:uniform_data])
+end
+function matching_time_edge(::SyndromeCircuit, noise::NoiseModel, is_x::Bool)
+    -log(noise.errors[:uniform_anc])
 end
 
 function constuct_graph_costs(graph_nodes::BiMap{NodeT, Int}, graph::Graph{Int},
+                              doubled_boundary::Vector{Tuple{Int, Int}},
                               noise_model::NoiseModel,
-                              syndrome_circuit::SyndromeCircuit)
+                              syndrome_circuit::SyndromeCircuit,
+                              is_x::Bool)
     rev_graph_nodes = rev(graph_nodes)
-    weights = MatchingGraphWeights(graph_nodes, noise_model, syndrome_circuit)
+    weights = MatchingGraphWeights(
+        graph_nodes, Set(doubled_boundary), noise_model, syndrome_circuit,
+        matching_space_edge(syndrome_circuit, noise_model, is_x),
+        matching_time_edge(syndrome_circuit, noise_model, is_x)
+    )
     paths = floyd_warshall_shortest_paths(graph, weights)
     boundary_ids = Set{Int}(
         id
