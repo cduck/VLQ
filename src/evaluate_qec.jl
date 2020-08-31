@@ -48,6 +48,10 @@ Holds probabilities of various quantum error sources
 struct NoiseModel
     errors::Dict{Symbol, Float64}
 end
+function Base.getproperty(noise::NoiseModel, s::Symbol)
+    s == :errors && return getfield(noise, :errors)
+    getfield(noise, :errors)[s]
+end
 
 """
     SyndromeCircuit
@@ -388,6 +392,7 @@ struct CodeDistanceRun
     x_prev::Vector{Bool}
     z_syndromes::Matrix{Bool}
     x_syndromes::Matrix{Bool}
+    sim_noise_params::Dict{Symbol, Float64}
 end
 function CodeDistanceRun(ctx::CodeDistanceSim)
     state = ChpState(ctx.num_qubits, bitpack=false)
@@ -397,9 +402,22 @@ function CodeDistanceRun(ctx::CodeDistanceSim)
     x_prev = zeros(Bool, length(ctx.x_plaqs))
     z_syndromes = Matrix{Bool}(undef, length(z_prev), ctx.m_dist+1)
     x_syndromes = Matrix{Bool}(undef, length(x_prev), ctx.m_dist+1)
+    sim_noise_params = simulation_noise_parameters(ctx.syndrome_circuit,
+                                                   ctx.noise_model)
     CodeDistanceRun(
         ctx, state, zx_error_counts, zx_meas_error_counts,
-        z_prev, x_prev, z_syndromes, x_syndromes
+        z_prev, x_prev, z_syndromes, x_syndromes,
+        sim_noise_params,
+    )
+end
+
+function simulation_noise_parameters(::SyndromeCircuit, model::NoiseModel)
+    Dict{Symbol, Float64}(
+        p_data => model.uniform_data,
+        p_anc_z => model.uniform_anc,
+        p_anc_x => model.uniform_anc,
+        p_cnot1 => 0,
+        p_cnot => 0,
     )
 end
 
