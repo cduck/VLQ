@@ -205,6 +205,7 @@ function simulation_noise_parameters(::NaturalAllAtOnce, model::NoiseModel,
         :p_data_layer1 => combine_error_probs(
             coherence_error(model.t1_c, t_c1_data),
             model.p_loadstore,
+            model.p_loadstore,
             coherence_error(model.t1_t, t_t_data)),
         :p_data => coherence_error(model.t1_t, t_t_data),
         :p_anc_z => combine_error_probs(
@@ -262,6 +263,7 @@ function simulation_noise_parameters(::NaturalInterleaved, model::NoiseModel,
                  + 2*model.dur_t + model.dur_meas)
     p_data = combine_error_probs(
         coherence_error(model.t1_c, t_c1_data),
+        model.p_loadstore,
         model.p_loadstore,
         coherence_error(model.t1_t, t_t_data))
     Dict{Symbol, Float64}(
@@ -332,9 +334,11 @@ function simulation_noise_parameters(::CompactAllAtOnce, model::NoiseModel,
         :p_data_layer1 => combine_error_probs(
             coherence_error(model.t1_c, t_c1_data),
             model.p_loadstore,
+            model.p_loadstore,
             coherence_error(model.t1_t, t_t_data)),
         :p_data => combine_error_probs(
             coherence_error(model.t1_c, t_c_data),
+            model.p_loadstore,
             model.p_loadstore,
             coherence_error(model.t1_t, t_t_data)),
         :p_anc_z => combine_error_probs(
@@ -396,6 +400,7 @@ function simulation_noise_parameters(::CompactInterleaved, model::NoiseModel,
     t_c_data = (model.cavity_depth-1) * t_round + (t_round - 3*model.dur_tt)
     p_data = combine_error_probs(
         coherence_error(model.t1_c, t_c_data),
+        model.p_loadstore,
         model.p_loadstore,
         coherence_error(model.t1_t, t_t_data))
     Dict{Symbol, Float64}(

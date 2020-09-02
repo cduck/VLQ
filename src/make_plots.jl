@@ -161,6 +161,7 @@ function plot(plot_i, x_arr, dists, y_arrs)
              "SC-SC Err", "L/S Err", "SC-Mode Err", "Cav T1",
              "Trans T1", "L/S Dur", "Cav Size"][plot_i]
     ax.set_title(title)
+    nothing
 end
 
 function plot_finished(job_id, plot_i, default::Float64=1.0)
