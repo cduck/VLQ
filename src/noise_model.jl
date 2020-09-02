@@ -204,6 +204,7 @@ function simulation_noise_parameters(::NormalAllAtOnce, model::NoiseModel,
     Dict{Symbol, Float64}(
         :p_data_layer1 => combine_error_probs(
             coherence_error(model.t1_c, t_c1_data),
+            model.p_loadstore,
             coherence_error(model.t1_t, t_t_data)),
         :p_data => coherence_error(model.t1_t, t_t_data),
         :p_anc_z => combine_error_probs(
@@ -230,8 +231,9 @@ function matching_space_edge(::NormalRoundRobin, model::NoiseModel,
     # Estimate of error on data qubit
     t_round = 4*model.dur_tt + 2*model.dur_t + model.dur_meas
     p = calculate_qubit_error_single_pauli(model,
-        t_t = t_round,
-        t_c = (model.cavity_depth-1) * (t_round + 2*model.dur_loadstore),
+        t_t = 4*model.dur_tt,
+        t_c = ((model.cavity_depth-1) * (t_round + 2*model.dur_loadstore)
+               + 2*model.dur_t + model.dur_meas),
         n_t = 0,
         n_tt = 4,
         n_loadstore = 2,
@@ -253,12 +255,14 @@ end
 function simulation_noise_parameters(::NormalRoundRobin, model::NoiseModel,
                                      ctx::CodeDistanceSim)
     t_round = 4*model.dur_tt + 2*model.dur_t + model.dur_meas
-    t_t_data = t_round
+    t_t_data = 4*model.dur_tt
     t_t_anc_z = 4*model.dur_tt
     t_t_anc_x = 4*model.dur_tt + 2*model.dur_t
-    t_c1_data = (model.cavity_depth-1) * (t_round + 2*model.dur_loadstore)
+    t_c1_data = ((model.cavity_depth-1) * (t_round + 2*model.dur_loadstore)
+                 + 2*model.dur_t + model.dur_meas)
     p_data = combine_error_probs(
         coherence_error(model.t1_c, t_c1_data),
+        model.p_loadstore,
         coherence_error(model.t1_t, t_t_data))
     Dict{Symbol, Float64}(
         :p_data_layer1 => p_data,
@@ -274,6 +278,76 @@ function simulation_noise_parameters(::NormalRoundRobin, model::NoiseModel,
                 n_t = 2),
             model.p_meas),
         :p_cnot1 => model.p_tt,
+        :p_cnot => model.p_tt,
+    )
+end
+
+# CompactAllAtOnce
+# CNOTs are staggered and interleaved to share qubits between data and ancilla
+# so take almost twice as long per layer
+# Z: One CNOT per data, then measure
+# X: Hadamard, one CNOT (reverse dir) per data, hadamard, measure
+# Extra store-load error in first layer and stored for (cavity-1)*d layers
+function matching_space_edge(::CompactAllAtOnce, model::NoiseModel,
+                             is_x::Bool, m_dist::Int, first_layer::Bool)
+    # Estimate of error on data qubit
+    t_round = (6*model.dur_tt + model.dur_tc + 2*model.dur_t + model.dur_meas
+               + 2*model.dur_loadstore)
+    p = calculate_qubit_error_single_pauli(model,
+            t_t = 3*model.dur_tt,
+            t_c = ((first_layer
+                        ? (model.cavity_depth-1) * (m_dist * t_round)
+                        : 0)
+                   + (t_round - 3*model.dur_tt)),
+            n_t = 0,
+            n_tt = 3,
+            n_tc = 1,
+            n_loadstore = 2,
+        )
+    -log(p)
+end
+function matching_time_edge(::CompactAllAtOnce, model::NoiseModel,
+                            is_x::Bool, m_dist::Int, first_layer::Bool)
+    # Estimate of error on ancilla qubit
+    # One CNOT is transmon-to-cavity
+    p = calculate_qubit_error_single_pauli(model,
+        t_t = 3*model.dur_tt + model.dur_tc + (is_x ? 2*model.dur_t : 0),
+        n_t = (is_x ? 2 : 0),
+        n_tt = 3,
+        n_tc = 1,
+        n_meas = 1,
+    )
+    -log(p)
+end
+function simulation_noise_parameters(::CompactAllAtOnce, model::NoiseModel,
+                                     ctx::CodeDistanceSim)
+    t_round = (6*model.dur_tt + model.dur_tc + 2*model.dur_t + model.dur_meas
+               + 2*model.dur_loadstore)
+    t_t_data = 3*model.dur_tt
+    t_t_anc_z = 3*model.dur_tt + model.dur_tc
+    t_t_anc_x = 3*model.dur_tt + model.dur_tc + 2*model.dur_t
+    t_c_data = t_round - 3*model.dur_tt
+    t_c1_data = t_c_data + (model.cavity_depth-1) * (ctx.m_dist * t_round)
+    Dict{Symbol, Float64}(
+        :p_data_layer1 => combine_error_probs(
+            coherence_error(model.t1_c, t_c1_data),
+            model.p_loadstore,
+            coherence_error(model.t1_t, t_t_data)),
+        :p_data => combine_error_probs(
+            coherence_error(model.t1_c, t_c_data),
+            model.p_loadstore,
+            coherence_error(model.t1_t, t_t_data)),
+        :p_anc_z => combine_error_probs(
+            calculate_qubit_error_single_pauli(model,
+                t_t = t_t_anc_z,
+                n_t = 0),
+            model.p_meas),
+        :p_anc_x => combine_error_probs(
+            calculate_qubit_error_single_pauli(model,
+                t_t = t_t_anc_x,
+                n_t = 2),
+            model.p_meas),
+        :p_cnot1 => model.p_tc,
         :p_cnot => model.p_tt,
     )
 end
