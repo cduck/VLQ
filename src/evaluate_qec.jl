@@ -123,10 +123,10 @@ function CodeDistanceSim(z_dist::Int, x_dist::Int, m_dist::Int,
 
     z_costs, z_bpaths, z_path_lengths = constuct_graph_costs(
         z_graph_nodes, z_graph, z_doubled_boundary,
-        noise_model, syndrome_circuit, false)
+        noise_model, syndrome_circuit, false, z_dist, m_dist)
     x_costs, x_bpaths, x_path_lengths = constuct_graph_costs(
         x_graph_nodes, x_graph, x_doubled_boundary,
-        noise_model, syndrome_circuit, true)
+        noise_model, syndrome_circuit, true, x_dist, m_dist)
 
     CodeDistanceSim(
         z_dist, x_dist, m_dist, syndrome_circuit, noise_model,
@@ -295,6 +295,8 @@ struct MatchingGraphWeights{SyndromeCircuitT} <: AbstractMatrix{Float64}
     doubled_boundary::Set{Tuple{Int, Int}}
     noise_model::NoiseModel
     syndrome_circuit::SyndromeCircuitT
+    space_edge1::Float64
+    time_edge1::Float64
     space_edge::Float64
     time_edge::Float64
 end
@@ -305,9 +307,9 @@ function Base.getindex(w::MatchingGraphWeights, i, j)::Float64
     # Inter-boundary
     (n[2] != :plaq && m[2] != :plaq) && return 0.0
     # Time edge (including boundary)
-    n[1] != m[1] && return w.time_edge
+    n[1] != m[1] && return (min(n[1], m[1]) == 0 ? w.time_edge1 : w.time_edge)
     # Space edge (including boundary)
-    return w.space_edge
+    return (n[1] == 1 ? w.space_edge1 : w.space_edge)
     #n[2] != :plaq && ((n, m) = (m, n))  # Make it plaq->boundary or plaq->plaq
     #return (m[2] != :plaq && (m[3], m[4]) in w.doubled_boundary
     #    # Plaq with two boundary qubits
@@ -316,10 +318,12 @@ function Base.getindex(w::MatchingGraphWeights, i, j)::Float64
     #    : w.space_edge
     #)
 end
-function matching_space_edge(::SyndromeCircuit, noise::NoiseModel, is_x::Bool)
+function matching_space_edge(::SyndromeCircuit, noise::NoiseModel,
+                             is_x::Bool, m_dist::Int, fisrt_layer::Bool)
     -log(noise.errors[:uniform_data])
 end
-function matching_time_edge(::SyndromeCircuit, noise::NoiseModel, is_x::Bool)
+function matching_time_edge(::SyndromeCircuit, noise::NoiseModel,
+                            is_x::Bool, m_dist::Int, first_layer::Bool)
     -log(noise.errors[:uniform_anc])
 end
 
@@ -327,12 +331,14 @@ function constuct_graph_costs(graph_nodes::BiMap{NodeT, Int}, graph::Graph{Int},
                               doubled_boundary::Vector{Tuple{Int, Int}},
                               noise_model::NoiseModel,
                               syndrome_circuit::SyndromeCircuit,
-                              is_x::Bool)
+                              is_x::Bool, dist::Int, m_dist::Int)
     rev_graph_nodes = rev(graph_nodes)
     weights = MatchingGraphWeights(
         graph_nodes, Set(doubled_boundary), noise_model, syndrome_circuit,
-        matching_space_edge(syndrome_circuit, noise_model, is_x),
-        matching_time_edge(syndrome_circuit, noise_model, is_x)
+        matching_space_edge(syndrome_circuit, noise_model, is_x, m_dist, true),
+        matching_time_edge(syndrome_circuit, noise_model, is_x, m_dist, true),
+        matching_space_edge(syndrome_circuit, noise_model, is_x, m_dist, false),
+        matching_time_edge(syndrome_circuit, noise_model, is_x, m_dist, false),
     )
     paths = floyd_warshall_shortest_paths(graph, weights)
     boundary_ids = Set{Int}(
@@ -403,7 +409,7 @@ function CodeDistanceRun(ctx::CodeDistanceSim)
     z_syndromes = Matrix{Bool}(undef, length(z_prev), ctx.m_dist+1)
     x_syndromes = Matrix{Bool}(undef, length(x_prev), ctx.m_dist+1)
     sim_noise_params = simulation_noise_parameters(ctx.syndrome_circuit,
-                                                   ctx.noise_model)
+                                                   ctx.noise_model, ctx)
     CodeDistanceRun(
         ctx, state, zx_error_counts, zx_meas_error_counts,
         z_prev, x_prev, z_syndromes, x_syndromes,
@@ -411,7 +417,8 @@ function CodeDistanceRun(ctx::CodeDistanceSim)
     )
 end
 
-function simulation_noise_parameters(::SyndromeCircuit, model::NoiseModel)
+function simulation_noise_parameters(::SyndromeCircuit, model::NoiseModel,
+                                     ctx::CodeDistanceSim)
     Dict{Symbol, Float64}(
         p_data => model.uniform_data,
         p_anc_z => model.uniform_anc,

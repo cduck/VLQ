@@ -87,9 +87,10 @@ function exec_syndrome_layer(
     ctx = run.ctx
     state = run.state
     # Apply errors
+    p_data = layer_i == 1 ? :p_data_layer1 : :p_data
     for q in ctx.data_qubits
         apply_fast_error!(noise_params, state, run.zx_error_counts,
-                         :p_data, (q,))
+                          p_data, (q,))
     end
     # Run circuit
     for info in ctx.z_plaq_info
