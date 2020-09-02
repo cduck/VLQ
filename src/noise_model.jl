@@ -1,14 +1,14 @@
-export TypicalSyndrome, NormalAllAtOnce, NormalRoundRobin, CompactAllAtOnce,
-    CompactRoundRobin,
+export TypicalSyndrome, NaturalAllAtOnce, NaturalInterleaved, CompactAllAtOnce,
+    CompactInterleaved,
     make_noise_model_for_paper
 
 
 # The different circuits evaluated
 struct TypicalSyndrome <: AbstractFastSyndrome end
-struct NormalAllAtOnce <: AbstractFastSyndrome end
-struct NormalRoundRobin <: AbstractFastSyndrome end
+struct NaturalAllAtOnce <: AbstractFastSyndrome end
+struct NaturalInterleaved <: AbstractFastSyndrome end
 struct CompactAllAtOnce <: AbstractFastSyndrome end
-struct CompactRoundRobin <: AbstractFastSyndrome end
+struct CompactInterleaved <: AbstractFastSyndrome end
 
 
 ### Make the noise model used in the paper
@@ -153,11 +153,11 @@ function simulation_noise_parameters(::TypicalSyndrome, model::NoiseModel,
     )
 end
 
-# NormalAllAtOnce
+# NaturalAllAtOnce
 # Z: One CNOT per data, then measure
 # X: Hadamard, one CNOT (reverse dir) per data, hadamard, measure
 # Extra store-load error in first layer and stored for (cavity-1)*d layers
-function matching_space_edge(::NormalAllAtOnce, model::NoiseModel,
+function matching_space_edge(::NaturalAllAtOnce, model::NoiseModel,
                              is_x::Bool, m_dist::Int, first_layer::Bool)
     # Estimate of error on data qubit
     t_round = 4*model.dur_tt + 2*model.dur_t + model.dur_meas
@@ -181,7 +181,7 @@ function matching_space_edge(::NormalAllAtOnce, model::NoiseModel,
     end
     -log(p)
 end
-function matching_time_edge(::NormalAllAtOnce, model::NoiseModel,
+function matching_time_edge(::NaturalAllAtOnce, model::NoiseModel,
                             is_x::Bool, m_dist::Int, first_layer::Bool)
     # Estimate of error on ancilla qubit
     # Same as TypicalSyndrome
@@ -193,7 +193,7 @@ function matching_time_edge(::NormalAllAtOnce, model::NoiseModel,
     )
     -log(p)
 end
-function simulation_noise_parameters(::NormalAllAtOnce, model::NoiseModel,
+function simulation_noise_parameters(::NaturalAllAtOnce, model::NoiseModel,
                                      ctx::CodeDistanceSim)
     t_round = 4*model.dur_tt + 2*model.dur_t + model.dur_meas
     t_t_data = t_round
@@ -222,11 +222,11 @@ function simulation_noise_parameters(::NormalAllAtOnce, model::NoiseModel,
     )
 end
 
-# NormalRoundRobin
+# NaturalInterleaved
 # Z: One CNOT per data, then measure
 # X: Hadamard, one CNOT (reverse dir) per data, hadamard, measure
 # Extra store-load error in *every* layer and stored for (cavity-1) layers
-function matching_space_edge(::NormalRoundRobin, model::NoiseModel,
+function matching_space_edge(::NaturalInterleaved, model::NoiseModel,
                              is_x::Bool, m_dist::Int, first_layer::Bool)
     # Estimate of error on data qubit
     t_round = 4*model.dur_tt + 2*model.dur_t + model.dur_meas
@@ -240,7 +240,7 @@ function matching_space_edge(::NormalRoundRobin, model::NoiseModel,
     )
     -log(p)
 end
-function matching_time_edge(::NormalRoundRobin, model::NoiseModel,
+function matching_time_edge(::NaturalInterleaved, model::NoiseModel,
                             is_x::Bool, m_dist::Int, first_layer::Bool)
     # Estimate of error on ancilla qubit
     # Same as TypicalSyndrome
@@ -252,7 +252,7 @@ function matching_time_edge(::NormalRoundRobin, model::NoiseModel,
     )
     -log(p)
 end
-function simulation_noise_parameters(::NormalRoundRobin, model::NoiseModel,
+function simulation_noise_parameters(::NaturalInterleaved, model::NoiseModel,
                                      ctx::CodeDistanceSim)
     t_round = 4*model.dur_tt + 2*model.dur_t + model.dur_meas
     t_t_data = 4*model.dur_tt
@@ -287,7 +287,7 @@ end
 # so take almost twice as long per layer
 # Z: One CNOT per data, then measure
 # X: Hadamard, one CNOT (reverse dir) per data, hadamard, measure
-# Extra store-load error in first layer and stored for (cavity-1)*d layers
+# Extra store-load error each layer and stored for (cavity-1)*d layers
 function matching_space_edge(::CompactAllAtOnce, model::NoiseModel,
                              is_x::Bool, m_dist::Int, first_layer::Bool)
     # Estimate of error on data qubit
@@ -337,6 +337,70 @@ function simulation_noise_parameters(::CompactAllAtOnce, model::NoiseModel,
             coherence_error(model.t1_c, t_c_data),
             model.p_loadstore,
             coherence_error(model.t1_t, t_t_data)),
+        :p_anc_z => combine_error_probs(
+            calculate_qubit_error_single_pauli(model,
+                t_t = t_t_anc_z,
+                n_t = 0),
+            model.p_meas),
+        :p_anc_x => combine_error_probs(
+            calculate_qubit_error_single_pauli(model,
+                t_t = t_t_anc_x,
+                n_t = 2),
+            model.p_meas),
+        :p_cnot1 => model.p_tc,
+        :p_cnot => model.p_tt,
+    )
+end
+
+# CompactInterleaved
+# CNOTs are staggered and interleaved to share qubits between data and ancilla
+# so take almost twice as long per layer
+# Z: One CNOT per data, then measure
+# X: Hadamard, one CNOT (reverse dir) per data, hadamard, measure
+# Extra store-load error each layer and stored for (cavity-1) layers between
+function matching_space_edge(::CompactInterleaved, model::NoiseModel,
+                             is_x::Bool, m_dist::Int, first_layer::Bool)
+    # Estimate of error on data qubit
+    t_round = (6*model.dur_tt + model.dur_tc + 2*model.dur_t + model.dur_meas
+               + 2*model.dur_loadstore)
+    p = calculate_qubit_error_single_pauli(model,
+            t_t = 3*model.dur_tt,
+            t_c = (model.cavity_depth-1) * t_round + (t_round - 3*model.dur_tt),
+            n_t = 0,
+            n_tt = 3,
+            n_tc = 1,
+            n_loadstore = 2,
+        )
+    -log(p)
+end
+function matching_time_edge(::CompactInterleaved, model::NoiseModel,
+                            is_x::Bool, m_dist::Int, first_layer::Bool)
+    # Estimate of error on ancilla qubit
+    # Same as CompactAllAtOnce
+    p = calculate_qubit_error_single_pauli(model,
+        t_t = 3*model.dur_tt + model.dur_tc + (is_x ? 2*model.dur_t : 0),
+        n_t = (is_x ? 2 : 0),
+        n_tt = 3,
+        n_tc = 1,
+        n_meas = 1,
+    )
+    -log(p)
+end
+function simulation_noise_parameters(::CompactInterleaved, model::NoiseModel,
+                                     ctx::CodeDistanceSim)
+    t_round = (6*model.dur_tt + model.dur_tc + 2*model.dur_t + model.dur_meas
+               + 2*model.dur_loadstore)
+    t_t_data = 3*model.dur_tt
+    t_t_anc_z = 3*model.dur_tt + model.dur_tc
+    t_t_anc_x = 3*model.dur_tt + model.dur_tc + 2*model.dur_t
+    t_c_data = (model.cavity_depth-1) * t_round + (t_round - 3*model.dur_tt)
+    p_data = combine_error_probs(
+        coherence_error(model.t1_c, t_c_data),
+        model.p_loadstore,
+        coherence_error(model.t1_t, t_t_data))
+    Dict{Symbol, Float64}(
+        :p_data_layer1 => p_data,
+        :p_data => p_data,
         :p_anc_z => combine_error_probs(
             calculate_qubit_error_single_pauli(model,
                 t_t = t_t_anc_z,
