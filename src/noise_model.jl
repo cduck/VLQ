@@ -32,7 +32,7 @@ const_keys = [:dur_tt, :dur_t, :dur_tc, :dur_loadstore, :dur_meas,
               :cavity_depth]
 coherence_keys = [:t1_t, :t1_c]
 error_rate_keys = [:p_t, :p_tt, :p_tc, :p_loadstore, :p_meas]
-sensitivity_base_p = 5e-3
+sensitivity_base_p = 2e-3
 
 function make_noise_model_for_paper(base_error::Float64, override_pairs=())
     error_factor = base_error / p0
