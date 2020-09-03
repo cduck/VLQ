@@ -1,0 +1,6 @@
+[deps]
+BlossomV = "6c721016-9dae-5d90-abf6-67daaccb2332"
+ChpSim = "c133084b-7dba-4976-8ce9-624a349e415e"
+LightGraphs = "093fc24a-ae57-5d10-9952-331d41423f4d"
+OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+PyPlot = "d330b81b-6aea-500a-939a-2ce795aea3ee"
