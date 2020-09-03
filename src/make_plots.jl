@@ -3,17 +3,21 @@ Generate plots for the paper.
 
 # Example
 ```julia
+# Setup
 include("src/make_plots.jl"); using .MakePlots
 MakePlots.setup(num_workers=16)  # Setup 16 worker processes
 
+# Run the simulations
 job_id = "all_plots"
-samples = 1000*2000  # ~1.15 CPU-hours per 100_1000
-dists = [3:2:11...]
-dist_calc_all(job_id, dists, samples, 1:12)  # Start computing
+samples = 1000*2000  # How many samples, ~1.15 CPU-hours per 100000 samples
+dists = [3:2:11...]  # Which code distances to simulate
+plots = [1:12...]  # Which of the 12 plots to generate
+MakePlots.dist_calc_all(job_id, dists, samples, 1:12)  # Start computing
 
-# Plot the results finished so far (without blocking)
+# Plot the results as they are computed
+# Run plot_finished() any time to check the progress of a plot
 for plot_i in 1:12
-    plot_finished(job_id, plot_i)
+    MakePlots.plot_finished(job_id, plot_i)
 end
 ```
 """

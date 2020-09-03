@@ -3,7 +3,7 @@ using LightGraphs
 using BlossomV
 
 using ChpSim
-using Tweaks.BiMaps, Tweaks.BaseTweaks
+include("BiMaps.jl"); using .BiMaps
 
 export x_gate!, z_gate!, reset!, measure_reset!,
     NoiseModel, SyndromeCircuit, BasicSyndrome,
@@ -12,6 +12,12 @@ export x_gate!, z_gate!, reset!, measure_reset!,
 
 
 const rng = Random.GLOBAL_RNG
+
+function Base.append!(dict::Dict, iter)
+    for (k, v) in iter
+        dict[k] = v
+    end
+end
 
 
 # Extra ChpSim methods
