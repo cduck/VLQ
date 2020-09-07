@@ -6,7 +6,7 @@ published in the proceedings of MICRO '20, the 53rd IEEE/ACM International Sympo
 
 Follow the instructions below to reproduce the simulation results from the paper.  See the [documentation](#documentation) for implementation details and guidance on extending it for new fault-tolerant architectures.
 
-[arxiv]: https://arxiv.org/...
+[arxiv]: https://arxiv.org/abs/2009.01982
 
 
 ## Install
