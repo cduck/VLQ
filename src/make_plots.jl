@@ -35,7 +35,7 @@ function setup(; num_workers=16)
     Jobs.launch_workers(num_workers)
     eval(:(@everywhere (
         include("src/vlq.jl");
-        using Tweaks.BiMaps
+        using .VLQ.BiMaps
     )))
 
     @everywhere function everywhere_calc_single(

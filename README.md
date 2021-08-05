@@ -23,9 +23,22 @@ Follow the instructions below to reproduce the simulation results from the paper
     ```bash
     julia -e 'using Pkg; Pkg.activate("."); Pkg.instantiate()'
     ```
-    or from the julia REPL
+    or from the julia REPL (start one with `julia --project=.`)
     ```
     ] activate .; instantiate
+    ```
+
+4. (Optional) Install package dependencies globally
+    ```bash
+    julia -e 'using Pkg; Pkg.add([PackageSpec(name="LightGraphs",        version=v"1.3.3"),
+                                  PackageSpec(name="BlossomV",           version=v"0.4.2"),
+                                  PackageSpec(name="ChpSim",             version=v"0.1.0"),
+                                  PackageSpec(name="OrderedCollections", version=v"1.3.0"),
+                                  PackageSpec(name="PyPlot"])'           version=v"2.9.0"),
+    ```
+    or from the julia REPL (start one with `julia --project=.`)
+    ```
+    ] add LightGraphs@1.3.3 BlossomV@0.4.2 ChpSim@0.1.0 OrderedCollections@1.3.0 PyPlot@2.9.0
     ```
 
 
