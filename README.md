@@ -34,11 +34,18 @@ Follow the instructions below to reproduce the simulation results from the paper
                                   PackageSpec(name="BlossomV",           version=v"0.4.2"),
                                   PackageSpec(name="ChpSim",             version=v"0.1.0"),
                                   PackageSpec(name="OrderedCollections", version=v"1.3.0"),
-                                  PackageSpec(name="PyPlot"])'           version=v"2.9.0"),
+                                  PackageSpec(name="PyPlot",             version=v"2.9.0")])'
     ```
-    or from the julia REPL (start one with `julia --project=.`)
+    or from the julia REPL (start one with `julia`)
     ```
     ] add LightGraphs@1.3.3 BlossomV@0.4.2 ChpSim@0.1.0 OrderedCollections@1.3.0 PyPlot@2.9.0
+    ```
+
+5. If you get errors building PyPlot, see [PyPlot installation](https://github.com/JuliaPy/PyPlot.jl#installation).  From the julia REPL:
+    ```julia
+    ENV["PYTHON"]=""
+    Pkg.build("PyCall")
+    import PyPlot
     ```
 
 
@@ -58,8 +65,10 @@ dists = [3:2:11...]  # Which code distances to simulate
 plots = [1:12...]  # Which of the 12 plots to generate
 MakePlots.dist_calc_all(job_id, dists, samples, 1:12)  # Start computing
 
+# Wait a few minutes before running the final lines
+
 # Plot the results as they are computed
-# Run plot_finished() any time to check the progress of a plot
+# Run plot_finished() at any time to check the progress of a plot
 for plot_i in 1:12
     MakePlots.plot_finished(job_id, plot_i)
 end
