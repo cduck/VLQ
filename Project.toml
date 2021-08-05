@@ -1,3 +1,8 @@
+name = "VLQ"
+uuid = "0dddfce6-7bb3-4b9d-ac25-201a9ffa93e3"
+authors = ["Casey Duckering"]
+version = "0.1.0"
+
 [deps]
 BlossomV = "6c721016-9dae-5d90-abf6-67daaccb2332"
 ChpSim = "c133084b-7dba-4976-8ce9-624a349e415e"
