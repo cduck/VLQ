@@ -28,13 +28,13 @@ import PyPlot; plt = PyPlot
 
 export setup, dist_calc_all, fetch_finished, plot, plot_finished
 
-include("vlq.jl")
+include("VLQ.jl")
 include("jobs.jl"); using .Jobs
 
 function setup(; num_workers=16)
     Jobs.launch_workers(num_workers)
     eval(:(@everywhere (
-        include("src/vlq.jl");
+        include("src/VLQ.jl");
         using .VLQ.BiMaps
     )))
 
