@@ -30,20 +30,30 @@ Follow the instructions below to reproduce the simulation results from the paper
 
 4. Install package dependencies globally (for the worker processes)
     ```bash
-    julia -e 'using Pkg; Pkg.add([PackageSpec(path="."),
-                                  PackageSpec(name="LightGraphs",        version=v"1.3.3"),
-                                  PackageSpec(name="BlossomV",           version=v"0.4.2"),
-                                  PackageSpec(name="ChpSim",             version=v"0.1.0"),
-                                  PackageSpec(name="OrderedCollections", version=v"1.3.0"),
-                                  PackageSpec(name="PyPlot",             version=v"2.9.0")])'
+    julia -e 'using Pkg;
+              Pkg.add([PackageSpec(path="."),
+                       PackageSpec(name="LightGraphs",        version=v"1.3.3"),
+                       PackageSpec(name="BlossomV",           version=v"0.4.2"),
+                       PackageSpec(name="ChpSim",             version=v"0.1.0"),
+                       PackageSpec(name="OrderedCollections", version=v"1.3.0"),
+                       PackageSpec(name="PyPlot",             version=v"2.9.0")])'
     ```
     or from the julia REPL (start one with `julia`)
     ```
     ] add . LightGraphs@1.3.3 BlossomV@0.4.2 ChpSim@0.1.0 OrderedCollections@1.3.0 PyPlot@2.9.0
     ```
+    And, optionally, update the packages with
+    ```bash
+    julia -e 'using Pkg; Pkg.update()'
+    ```
+    or from the julia REPL
+    ```
+    ] update
+    ```
 
 5. If you get errors building PyPlot, see [PyPlot installation](https://github.com/JuliaPy/PyPlot.jl#installation).  From the julia REPL:
     ```julia
+    using Pkg
     ENV["PYTHON"]=""
     Pkg.build("PyCall")
     import PyPlot
